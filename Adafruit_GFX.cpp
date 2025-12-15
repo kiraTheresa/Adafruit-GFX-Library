@@ -372,41 +372,193 @@ void Adafruit_GFX::fillRoundRect(int16_t x, int16_t y, int16_t w,
 
 // Draw a Pentagram
 void Adafruit_GFX::drawPentagram(int16_t x0, int16_t y0,
-        int16_t r0, uint16_t color) {
-	int xa, ya;
-    int xb, yb;
-    int xc, yc;
-    int xd, yd;
-    int xe, ye;
-    xa = x0;
-    ya = y0 - r0;
-    xb = x0 - r0 * sin(PI / 180 * 72);
-    yb = y0 + r0 * -(cos(PI / 180 * 72));
-    xc = x0 - r0 * -(sin(PI / 180 * 36));
-    yc = y0 - r0 * -(cos(PI / 180 * 36));
-    xd = x0 + r0 * -(sin(PI / 180 * 36));
-    yd = y0 - r0 * -(cos(PI / 180 * 36));
-    xe = x0 + r0 * sin(PI / 180 * 72);
-    ye = y0 + r0 * -(cos(PI / 180 * 72));
-    drawLine(xa, ya, xc, yc, color);
-    drawLine(xa, ya, xd, yd, color);
-    drawLine(xb, yb, xc, yc, color);
-	drawLine(xb, yb, xe, ye, color);
-	drawLine(xd, yd, xe, ye, color);
+        int16_t radius, uint16_t color) {
+    float angle = -PI / 2; // Start at top
+    float delta = 2 * PI / 5; // 72 degrees between points
+    float innerRadius = radius * 0.38197; // Ratio of inner to outer radius for pentagram
+    
+    // Calculate all vertices
+    int16_t points[20]; // 5 outer points, 5 inner points
+    
+    for (int i = 0; i < 5; i++) {
+        // Outer points
+        points[2*i] = x0 + radius * cos(angle + i * delta);
+        points[2*i+1] = y0 + radius * sin(angle + i * delta);
+        // Inner points
+        points[2*(i+5)] = x0 + innerRadius * cos(angle + i * delta + delta/2);
+        points[2*(i+5)+1] = y0 + innerRadius * sin(angle + i * delta + delta/2);
+    }
+    
+    startWrite();
+    
+    // Draw the pentagram by connecting outer points to inner points
+    for (int i = 0; i < 5; i++) {
+        // Connect outer point i to outer point (i+2)%5
+        writeLine(points[2*i], points[2*i+1], 
+                  points[2*((i+2)%5)], points[2*((i+2)%5)+1], 
+                  color);
+    }
+    
+    endWrite();
 }
 
-// Draw a ellipse outline
-void Adafruit_GFX::drawEllipse(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t a, uint16_t color) {
-    int16_t max_x = ((x1 > x2 ? x1 : x2) + a > 128 ? (x1 > x2 ? x1 : x2) + a : 128);
-    int16_t max_y = ((y1 > y2 ? y1 : y2) + a > 64 ? (y1 > y2 ? y1 : y2) + a : 64);
-    for (int16_t x = ((x1 > x2 ? x2 : x1) - a > 0 ? (x1 > x2 ? x2 : x1) - a : 0 ); x <= max_x; x++) {
-        for (int16_t y = ((y1 > y2 ? y2 : y1) - a > 0 ? (y1 > y2 ? y2 : y1) - a : 0); y <= max_y; y++) {
-            int32_t distance = sqrt((x - x1) * (x - x1) + (y - y1) * (y - y1)) + sqrt((x - x2) * (x - x2) + (y - y2) * (y - y2));
-            if (distance-a == a) {
-                writePixel(x, y, color);
-            }
+// Fill a Pentagram
+void Adafruit_GFX::fillPentagram(int16_t x0, int16_t y0,
+        int16_t radius, uint16_t color) {
+    float angle = -PI / 2; // Start at top
+    float delta = 2 * PI / 5; // 72 degrees between points
+    float innerRadius = radius * 0.38197; // Ratio of inner to outer radius for pentagram
+    
+    // Calculate all vertices
+    int16_t points[20]; // 5 outer points, 5 inner points
+    
+    for (int i = 0; i < 5; i++) {
+        // Outer points
+        points[2*i] = x0 + radius * cos(angle + i * delta);
+        points[2*i+1] = y0 + radius * sin(angle + i * delta);
+        // Inner points
+        points[2*(i+5)] = x0 + innerRadius * cos(angle + i * delta + delta/2);
+        points[2*(i+5)+1] = y0 + innerRadius * sin(angle + i * delta + delta/2);
+    }
+    
+    startWrite();
+    
+    // Fill the pentagram by filling 5 triangles
+    // Each triangle is formed by center, inner point i, and inner point (i+1)%5
+    for (int i = 0; i < 5; i++) {
+        int16_t inner1 = 2*(i+5);
+        int16_t inner2 = 2*(((i+1)%5)+5);
+        
+        // Fill triangle: center -> inner1 -> inner2
+        fillTriangle(x0, y0, points[inner1], points[inner1+1], points[inner2], points[inner2+1], color);
+        
+        // Fill triangle: outer point i -> inner1 -> inner2
+        int16_t outer = 2*i;
+        fillTriangle(points[outer], points[outer+1], points[inner1], points[inner1+1], points[inner2], points[inner2+1], color);
+    }
+    
+    endWrite();
+}
+
+// Draw an ellipse outline using Midpoint Ellipse Algorithm
+void Adafruit_GFX::drawEllipse(int16_t x0, int16_t y0, int16_t a, int16_t b, uint16_t color) {
+    int32_t a2 = (int32_t)a * a;
+    int32_t b2 = (int32_t)b * b;
+    int32_t twoa2 = 2 * a2;
+    int32_t twob2 = 2 * b2;
+    int32_t x = 0;
+    int32_t y = b;
+    int32_t px = 0;
+    int32_t py = twoa2 * y;
+    int32_t p;
+    
+    startWrite();
+    
+    // Plot initial points
+    writePixel(x0 + x, y0 + y, color);
+    writePixel(x0 - x, y0 + y, color);
+    writePixel(x0 + x, y0 - y, color);
+    writePixel(x0 - x, y0 - y, color);
+    
+    // Region 1: x-direction为主
+    p = b2 - (a2 * b) + (a2 / 4);
+    while (px < py) {
+        x++;
+        px += twob2;
+        if (p < 0) {
+            p += b2 + px;
+        } else {
+            y--;
+            py -= twoa2;
+            p += b2 + px - py;
+        }
+        writePixel(x0 + x, y0 + y, color);
+        writePixel(x0 - x, y0 + y, color);
+        writePixel(x0 + x, y0 - y, color);
+        writePixel(x0 - x, y0 - y, color);
+    }
+    
+    // Region 2: y-direction为主
+    p = b2 * (x + 0.5) * (x + 0.5) + a2 * (y - 1) * (y - 1) - a2 * b2;
+    while (y > 0) {
+        y--;
+        py -= twoa2;
+        if (p > 0) {
+            p += a2 - py;
+        } else {
+            x++;
+            px += twob2;
+            p += a2 - py + px;
+        }
+        writePixel(x0 + x, y0 + y, color);
+        writePixel(x0 - x, y0 + y, color);
+        writePixel(x0 + x, y0 - y, color);
+        writePixel(x0 - x, y0 - y, color);
+    }
+    
+    endWrite();
+}
+
+// Fill an ellipse using Midpoint Ellipse Algorithm with horizontal lines
+void Adafruit_GFX::fillEllipse(int16_t x0, int16_t y0, int16_t a, int16_t b, uint16_t color) {
+    if (a == 0 || b == 0) return;
+    
+    int32_t a2 = (int32_t)a * a;
+    int32_t b2 = (int32_t)b * b;
+    int32_t twoa2 = 2 * a2;
+    int32_t twob2 = 2 * b2;
+    int32_t x = 0;
+    int32_t y = b;
+    int32_t px = 0;
+    int32_t py = twoa2 * y;
+    int32_t p;
+    
+    startWrite();
+    
+    // Initial fill lines
+    writeFastHLine(x0 - x, y0 + y, 2 * x + 1, color);
+    writeFastHLine(x0 - x, y0 - y, 2 * x + 1, color);
+    
+    // Region 1: x-direction为主
+    p = b2 - (a2 * b) + (a2 / 4);
+    while (px < py) {
+        x++;
+        px += twob2;
+        if (p < 0) {
+            p += b2 + px;
+        } else {
+            // Fill the previous y before decrementing
+            writeFastHLine(x0 - x, y0 + y, 2 * x + 1, color);
+            writeFastHLine(x0 - x, y0 - y, 2 * x + 1, color);
+            y--;
+            py -= twoa2;
+            p += b2 + px - py;
+        }
+        // Fill the current x,y
+        writeFastHLine(x0 - x, y0 + y, 2 * x + 1, color);
+        writeFastHLine(x0 - x, y0 - y, 2 * x + 1, color);
+    }
+    
+    // Region 2: y-direction为主
+    p = b2 * (x + 0.5) * (x + 0.5) + a2 * (y - 1) * (y - 1) - a2 * b2;
+    while (y > 0) {
+        // Fill the current y before decrementing
+        writeFastHLine(x0 - x, y0 + y, 2 * x + 1, color);
+        writeFastHLine(x0 - x, y0 - y, 2 * x + 1, color);
+        y--;
+        py -= twoa2;
+        if (p > 0) {
+            p += a2 - py;
+        } else {
+            x++;
+            px += twob2;
+            p += a2 - py + px;
         }
     }
+    
+    // Fill the center line (y=0)
+    writeFastHLine(x0 - a, y0, 2 * a + 1, color);
+    
     endWrite();
 }
 
