@@ -212,4 +212,3 @@ class GFXcanvas16 : public Adafruit_GFX {
 };
 
 #endif // _ADAFRUIT_GFX_H
-
