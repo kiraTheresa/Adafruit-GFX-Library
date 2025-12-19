@@ -395,6 +395,37 @@ void Adafruit_GFX::drawPentagram(int16_t x0, int16_t y0,
 	drawLine(xd, yd, xe, ye, color);
 }
 
+// 绘制爱心
+void Adafruit_GFX::drawHeart(int16_t x0, int16_t y0, int16_t size, uint16_t color) {
+    startWrite();
+    
+    // 爱心参数方程
+    for (float t = 0; t <= 2 * PI; t += 0.01) {
+        // 爱心参数方程
+        float x = 16 * pow(sin(t), 3);
+        float y = -(13 * cos(t) - 5 * cos(2*t) - 2 * cos(3*t) - cos(4*t));
+        
+        // 缩放并调整位置
+        int16_t px = x0 + (int16_t)(x * size / 16);
+        int16_t py = y0 + (int16_t)(y * size / 16);
+        
+        // 绘制爱心轮廓上的点
+        if (px >= 0 && px < _width && py >= 0 && py < _height) {
+            writePixel(px, py, color);
+        }
+        
+        // 为了更实心的效果，可以绘制一些内部的点
+        for (int16_t i = 0; i < size/8; i++) {
+            int16_t px_inner = px + i - size/16;
+            if (px_inner >= 0 && px_inner < _width && py >= 0 && py < _height) {
+                writePixel(px_inner, py, color);
+            }
+        }
+    }
+    
+    endWrite();
+}
+
 // Draw a ellipse outline
 void Adafruit_GFX::drawEllipse(int16_t x1, int16_t y1, int16_t x2, int16_t y2, int16_t a, uint16_t color) {
     int16_t max_x = ((x1 > x2 ? x1 : x2) + a > 128 ? (x1 > x2 ? x1 : x2) + a : 128);
@@ -1388,5 +1419,3 @@ void GFXcanvas16::fillScreen(uint16_t color) {
         }
     }
 }
-
-
